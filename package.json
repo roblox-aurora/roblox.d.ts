@@ -1,0 +1,25 @@
+{
+	"name": "roblox-dts",
+	"version": "0.0.1",
+	"description": "",
+	"main": "out/index.js",
+	"scripts": {
+		"debug": "tsc && node out/index.js"
+	},
+	"bin": {
+		"rbxdts": "out/cli.js"
+	},
+	"keywords": [
+		"Declaration", "Generator", "Lua", "Roblox"
+	],
+	"author": "Vorlias",
+	"license": "MIT",
+	"dependencies": {
+		"fs-extra": "^8.1.0",
+		"luaparse": "^0.2.1",
+		"ts-morph": "^4.3.2"
+	},
+	"devDependencies": {
+		"@types/fs-extra": "^8.0.1"
+	}
+}
