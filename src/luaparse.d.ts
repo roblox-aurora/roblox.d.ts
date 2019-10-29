@@ -57,6 +57,10 @@ interface LuaLocalStatement extends LuaNode<"LocalStatement"> {
 	variables: LuaIdentifier[];
 }
 
+interface LuaDoStatement extends LuaNode<"DoStatement"> {
+	body: LuaNode[];
+}
+
 interface LuaVarargLiteral extends LuaNode<"VarargLiteral"> {
 	value: "...";
 	raw: "...";

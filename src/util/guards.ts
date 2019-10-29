@@ -84,6 +84,10 @@ namespace TypeGuard {
 	): node is LuaBinaryExpression {
 		return node.type === "BinaryExpression";
 	}
+
+	export function isLuaDoStatement(node: LuaNode): node is LuaDoStatement {
+		return node.type === "DoStatement";
+	}
 }
 
 export = TypeGuard;

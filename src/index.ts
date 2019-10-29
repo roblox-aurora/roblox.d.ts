@@ -276,6 +276,113 @@ function generateStatementsForReturn(node: LuaReturnNode, body: LuaNode[]) {
 	return statements;
 }
 
+function generate(body: LuaNode[]) {
+	const statements = new Array<StatementStructures>();
+
+	for (const node of body) {
+		// Handle top-level return node (export)
+		if (TypeGuard.isLuaReturnNode(node)) {
+			for (const [name, interfaceDeclaration] of interfaces.entries()) {
+				statements.push({
+					kind: StructureKind.Interface,
+					name: name,
+					hasDeclareKeyword: true,
+					properties: interfaceDeclaration.properties,
+					methods: interfaceDeclaration.methods,
+				});
+
+				statements.push({
+					kind: StructureKind.VariableStatement,
+					hasDeclareKeyword: true,
+					declarationKind: VariableDeclarationKind.Const,
+					declarations: [
+						{
+							name: name,
+							type: name,
+						},
+					],
+				});
+			}
+
+			for (const [name, interfaceDeclaration] of classes.entries()) {
+				console.log("declare class", name);
+
+				statements.push({
+					kind: StructureKind.Class,
+					name: name,
+					hasDeclareKeyword: true,
+					ctors: interfaceDeclaration.ctors,
+					trailingTrivia: " /* Found __index usage - Class */",
+					methods: interfaceDeclaration.methods,
+				});
+			}
+
+			getInterfacedNodes(body);
+
+			statements.push(...generateStatementsForReturn(node, body));
+		} else if (isLuaAssignmentStatement(node)) {
+			console.log("isLuaAssignmentStatement");
+			for (const [index, variable] of node.variables.entries()) {
+				const init = node.init[index] as LuaIdentifier;
+
+				// Convert to class...
+				console.log("luaMemExpression", variable, init);
+				if (
+					init.name === variable.base.name &&
+					variable.identifier.name === "__index"
+				) {
+					const existing = interfaces.get(init.name);
+					if (existing) {
+						classes.set(init.name, {
+							properties: [],
+							ctors: [],
+							methods: existing.methods.map(method => {
+								console.log(method.name, "existingMethod");
+								return {
+									kind: StructureKind.Method,
+									returnType: method.returnType,
+									name: method.name,
+									parameters: method.parameters,
+								} as MethodDeclarationStructure;
+							}),
+						});
+
+						interfaces.delete(init.name);
+					}
+				}
+			}
+		} else if (TypeGuard.isLuaLocalStatement(node)) {
+			for (const [i, v] of node.variables.entries()) {
+				const init = node.init[i];
+				if (TypeGuard.isTableConstructorExpression(init)) {
+					const properties = new Array<PropertySignatureStructure>();
+					for (const field of init.fields) {
+						if (TypeGuard.isLuaTableKeyString(field)) {
+							properties.push({
+								kind: StructureKind.PropertySignature,
+								name: field.key.name,
+								type: TypeGuard.isLiteral(field.value)
+									? typeOf(field.value)
+									: "unknown",
+							});
+						}
+					}
+
+					interfaces.set(v.name, {
+						properties,
+						methods: [],
+					});
+				}
+			}
+		} else if (TypeGuard.isLuaDoStatement(node)) {
+			statements.push(...generate(node.body));
+			getInterfacedNodes(node.body);
+		}
+	}
+
+	return statements;
+}
+
 function generateFileFor(file: string) {
 	fs.readFile(file)
 		.then(buffer => {
@@ -287,151 +394,30 @@ function generateFileFor(file: string) {
 		.then(ast => {
 			console.log(JSON.stringify(ast, null, 4));
 
-			let exported = false;
-			const statements = new Array<StatementStructures>();
+			const statements = generate(ast.body);
 
-			for (const node of ast.body) {
-				// Handle top-level return node (export)
-				if (TypeGuard.isLuaReturnNode(node)) {
-					exported = true;
+			const project = new Project({
+				compilerOptions: {
+					declaration: true,
+				},
+			});
 
-					for (const [
-						name,
-						interfaceDeclaration,
-					] of interfaces.entries()) {
-						statements.push({
-							kind: StructureKind.Interface,
-							name: name,
-							hasDeclareKeyword: true,
-							properties: interfaceDeclaration.properties,
-							methods: interfaceDeclaration.methods,
-						});
+			const newFile = path.join(
+				path.dirname(file),
+				path.basename(file, ".lua") + ".d.ts",
+			);
 
-						statements.push({
-							kind: StructureKind.VariableStatement,
-							hasDeclareKeyword: true,
-							declarationKind: VariableDeclarationKind.Const,
-							declarations: [
-								{
-									name: name,
-									type: name,
-								},
-							],
-						});
-					}
+			project.createSourceFile(
+				newFile,
+				{
+					statements,
+					leadingTrivia:
+						"/* Generated with Experimental RbxLua -> Declaration program */",
+				},
+				{ overwrite: true },
+			);
 
-					for (const [
-						name,
-						interfaceDeclaration,
-					] of classes.entries()) {
-						console.log("declare class", name);
-
-						statements.push({
-							kind: StructureKind.Class,
-							name: name,
-							hasDeclareKeyword: true,
-							ctors: interfaceDeclaration.ctors,
-							trailingTrivia:
-								" /* Found __index usage - Class */",
-							methods: interfaceDeclaration.methods,
-						});
-					}
-
-					getInterfacedNodes(ast.body);
-
-					statements.push(
-						...generateStatementsForReturn(node, ast.body),
-					);
-				} else if (isLuaAssignmentStatement(node)) {
-					console.log("isLuaAssignmentStatement");
-					for (const [index, variable] of node.variables.entries()) {
-						const init = node.init[index] as LuaIdentifier;
-
-						// Convert to class...
-						console.log("luaMemExpression", variable, init);
-						if (
-							init.name === variable.base.name &&
-							variable.identifier.name === "__index"
-						) {
-							const existing = interfaces.get(init.name);
-							if (existing) {
-								classes.set(init.name, {
-									properties: [],
-									ctors: [],
-									methods: existing.methods.map(method => {
-										console.log(
-											method.name,
-											"existingMethod",
-										);
-										return {
-											kind: StructureKind.Method,
-											returnType: method.returnType,
-											name: method.name,
-											parameters: method.parameters,
-										} as MethodDeclarationStructure;
-									}),
-								});
-
-								interfaces.delete(init.name);
-							}
-						}
-					}
-				} else if (TypeGuard.isLuaLocalStatement(node)) {
-					for (const [i, v] of node.variables.entries()) {
-						const init = node.init[i];
-						if (TypeGuard.isTableConstructorExpression(init)) {
-							const properties = new Array<
-								PropertySignatureStructure
-							>();
-							for (const field of init.fields) {
-								if (TypeGuard.isLuaTableKeyString(field)) {
-									properties.push({
-										kind: StructureKind.PropertySignature,
-										name: field.key.name,
-										type: TypeGuard.isLiteral(field.value)
-											? typeOf(field.value)
-											: "unknown",
-									});
-								}
-							}
-
-							interfaces.set(v.name, {
-								properties,
-								methods: [],
-							});
-						}
-					}
-				}
-			}
-
-			if (!exported) {
-				console.log(
-					"Cannot export as module if it is missing a return statement",
-				);
-			} else {
-				const project = new Project({
-					compilerOptions: {
-						declaration: true,
-					},
-				});
-
-				const newFile = path.join(
-					path.dirname(file),
-					path.basename(file, ".lua") + ".d.ts",
-				);
-
-				project.createSourceFile(
-					newFile,
-					{
-						statements,
-						leadingTrivia:
-							"/* Generated with Experimental RbxLua -> Declaration program */",
-					},
-					{ overwrite: true },
-				);
-
-				project.save();
-			}
+			project.save();
 		});
 }
 
