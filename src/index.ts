@@ -312,6 +312,27 @@ function generateStatementsForReturn(
 								alias: key.name,
 							});
 						}
+					} else if (
+						isLuaNumericLiteral(value) ||
+						isLuaStringLiteral(value) ||
+						isLuaBooleanLiteral(value)
+					) {
+						statements.push({
+							kind: StructureKind.VariableStatement,
+							hasDeclareKeyword: true,
+							declarationKind: VariableDeclarationKind.Const,
+							declarations: [
+								{
+									name: key.name,
+									type: getValueTypeOfNode(value),
+								},
+							],
+						});
+
+						namedExports.push({
+							kind: StructureKind.ExportSpecifier,
+							name: key.name,
+						});
 					}
 				}
 			}
@@ -332,6 +353,27 @@ function generateStatementsForReturn(
 			statements.push({
 				kind: StructureKind.ExportAssignment,
 				expression: "fn",
+			});
+		} else if (
+			isLuaStringLiteral(arg) ||
+			isLuaNumericLiteral(arg) ||
+			isLuaBooleanLiteral(arg)
+		) {
+			statements.push({
+				kind: StructureKind.VariableStatement,
+				hasDeclareKeyword: true,
+				declarationKind: VariableDeclarationKind.Const,
+				declarations: [
+					{
+						name: "value",
+						type: getValueTypeOfNode(arg),
+					},
+				],
+			});
+
+			statements.push({
+				kind: StructureKind.ExportAssignment,
+				expression: "value",
 			});
 		} else {
 			console.log(`unknown expression ${node.type}`);
