@@ -107,7 +107,10 @@ function getInterfacedNodes(body: luaparse.Statement[]) {
 				const int = interfaces.get(identifier.base.name);
 				const cls = classes.get(identifier.base.name);
 				if (int) {
-					if (TypeGuard.isMemberExpression(identifier!)) {
+					if (
+						TypeGuard.isMemberExpression(identifier!) &&
+						TypeGuard.isLuaIdentifier(identifier.base)
+					) {
 						if (identifier.indexer === ":") {
 							int.methods.push({
 								kind: StructureKind.MethodSignature,
@@ -117,17 +120,24 @@ function getInterfacedNodes(body: luaparse.Statement[]) {
 								returnType: getFunctionReturnType(bodyNode),
 							});
 						} else {
+							const parameters = getFunctionParameters(bodyNode);
+							let isConstructorLike = false;
+
+							if (identifier.identifier.name !== "new") {
+								parameters.unshift({
+									kind: StructureKind.Parameter,
+									name: "this",
+									type: "void",
+								});
+							} else {
+								isConstructorLike = true;
+							}
+
 							int.methods.push({
 								kind: StructureKind.MethodSignature,
 								name: identifier.identifier.name,
 								trailingTrivia: ` // '.' function`,
-								parameters: [
-									{
-										name: "this",
-										type: "void",
-									},
-									...getFunctionParameters(bodyNode),
-								],
+								parameters,
 								returnType: getFunctionReturnType(bodyNode),
 							});
 						}
