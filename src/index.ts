@@ -21,6 +21,7 @@ import TypeGuard, {
 	isLuaNumericLiteral,
 	isLuaBooleanLiteral,
 	isLuaBinaryExpression,
+	isLuaFunctionDeclaration,
 } from "./util/guards";
 import path from "path";
 
@@ -318,6 +319,19 @@ function generateStatementsForReturn(
 			statements.push({
 				kind: StructureKind.ExportDeclaration,
 				namedExports,
+			});
+		} else if (isLuaFunctionDeclaration(arg)) {
+			statements.push({
+				kind: StructureKind.Function,
+				name: "fn",
+				hasDeclareKeyword: true,
+				parameters: getFunctionParameters(arg),
+				returnType: getFunctionReturnType(arg),
+			});
+
+			statements.push({
+				kind: StructureKind.ExportAssignment,
+				expression: "fn",
 			});
 		} else {
 			console.log(`unknown expression ${node.type}`);
