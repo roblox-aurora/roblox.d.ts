@@ -10,7 +10,10 @@
 		"rbxdts": "out/cli.js"
 	},
 	"keywords": [
-		"Declaration", "Generator", "Lua", "Roblox"
+		"Declaration",
+		"Generator",
+		"Lua",
+		"Roblox"
 	],
 	"author": "Vorlias",
 	"license": "MIT",
@@ -20,6 +23,7 @@
 		"ts-morph": "^4.3.2"
 	},
 	"devDependencies": {
-		"@types/fs-extra": "^8.0.1"
+		"@types/fs-extra": "^8.0.1",
+		"@types/luaparse": "^0.2.6"
 	}
 }

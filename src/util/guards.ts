@@ -1,91 +1,99 @@
+import luaparse from "luaparse";
+
 namespace TypeGuard {
-	export function isLuaReturnNode(node: LuaNode): node is LuaReturnNode {
+	export function isLuaReturnNode(
+		node: luaparse.Node,
+	): node is luaparse.ReturnStatement {
 		return node.type === "ReturnStatement";
 	}
 
 	export function isLuaNumericLiteral(
-		node: LuaNode,
-	): node is LuaNumericLiteral {
+		node: luaparse.Node,
+	): node is luaparse.NumericLiteral {
 		return node.type === "NumericLiteral";
 	}
 
 	export function isLuaStringLiteral(
-		node: LuaNode,
-	): node is LuaStringLiteral {
+		node: luaparse.Node,
+	): node is luaparse.StringLiteral {
 		return node.type === "StringLiteral";
 	}
 
 	export function isLiteral(
-		node: LuaNode,
-	): node is LuaStringLiteral | LuaNumericLiteral {
+		node: luaparse.Node,
+	): node is luaparse.StringLiteral | luaparse.NumericLiteral {
 		return isLuaStringLiteral(node) || isLuaNumericLiteral(node);
 	}
 
-	export function isLuaIdentifier(node: LuaNode): node is LuaIdentifier {
+	export function isLuaIdentifier(
+		node: luaparse.Node,
+	): node is luaparse.Identifier {
 		return node.type === "Identifier";
 	}
 
 	export function isLuaLocalStatement(
-		node: LuaNode,
-	): node is LuaLocalStatement {
+		node: luaparse.Node,
+	): node is luaparse.LocalStatement {
 		return node.type === "LocalStatement";
 	}
 
 	export function isTableConstructorExpression(
-		node: LuaNode,
-	): node is LuaTableConstructorExpression {
+		node: luaparse.Node,
+	): node is luaparse.TableConstructorExpression {
 		return node.type === "TableConstructorExpression";
 	}
 
 	export function isMemberExpression(
-		node: LuaNode,
-	): node is LuaMemberExpression {
+		node: luaparse.Node,
+	): node is luaparse.MemberExpression {
 		return node.type === "MemberExpression";
 	}
 
 	export function isLuaFunctionDeclaration(
-		node: LuaNode,
-	): node is LuaFunctionDeclaration {
+		node: luaparse.Node,
+	): node is luaparse.FunctionDeclaration {
 		return node.type === "FunctionDeclaration";
 	}
 
 	export function isLuaTableKeyString(
-		node: LuaNode,
-	): node is LuaTableKeyString {
+		node: luaparse.Node,
+	): node is luaparse.TableKeyString {
 		return node.type === "TableKeyString";
 	}
 
 	export function isLuaVarargLiteral(
-		node: LuaNode,
-	): node is LuaVarargLiteral {
+		node: luaparse.Node,
+	): node is luaparse.VarargLiteral {
 		return node.type === "VarargLiteral";
 	}
 
 	export function isLuaAssignmentStatement(
-		node: LuaNode,
-	): node is LuaAssignmentStatement {
+		node: luaparse.Node,
+	): node is luaparse.AssignmentStatement {
 		return node.type === "AssignmentStatement";
 	}
 
 	export function isLuaMemberExpression(
-		node: LuaNode,
-	): node is LuaMemberExpression {
+		node: luaparse.Node,
+	): node is luaparse.MemberExpression {
 		return node.type === "MemberExpression";
 	}
 
 	export function isLuaBooleanLiteral(
-		node: LuaNode,
-	): node is LuaBooleanLiteral {
+		node: luaparse.Node,
+	): node is luaparse.BooleanLiteral {
 		return node.type === "BooleanLiteral";
 	}
 
 	export function isLuaBinaryExpression(
-		node: LuaNode,
-	): node is LuaBinaryExpression {
+		node: luaparse.Node,
+	): node is luaparse.BinaryExpression {
 		return node.type === "BinaryExpression";
 	}
 
-	export function isLuaDoStatement(node: LuaNode): node is LuaDoStatement {
+	export function isLuaDoStatement(
+		node: luaparse.Node,
+	): node is luaparse.DoStatement {
 		return node.type === "DoStatement";
 	}
 }

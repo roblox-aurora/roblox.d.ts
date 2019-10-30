@@ -10,7 +10,6 @@ import {
 	PropertySignatureStructure,
 	MethodSignatureStructure,
 	MethodDeclarationStructure,
-	ConstructSignatureDeclaration,
 	ConstructorDeclarationStructure,
 } from "ts-morph";
 import TypeGuard, {
@@ -24,7 +23,6 @@ import TypeGuard, {
 	isLuaBinaryExpression,
 } from "./util/guards";
 import path from "path";
-import { typeOf } from "./util/helper";
 
 const interfaces = new Map<
 	string,
@@ -43,7 +41,7 @@ const classes = new Map<
 	}
 >();
 
-function getFunctionParameters(functonNode: LuaFunctionDeclaration) {
+function getFunctionParameters(functonNode: luaparse.FunctionDeclaration) {
 	const parameters = new Array<ParameterDeclarationStructure>();
 	for (const param of functonNode.parameters) {
 		if (TypeGuard.isLuaIdentifier(param)) {
@@ -64,7 +62,7 @@ function getFunctionParameters(functonNode: LuaFunctionDeclaration) {
 	return parameters;
 }
 
-function getValueTypeOfNode(node: LuaNode) {
+function getValueTypeOfNode(node: luaparse.Expression) {
 	if (isLuaStringLiteral(node)) {
 		return "string";
 	} else if (isLuaNumericLiteral(node)) {
@@ -76,7 +74,7 @@ function getValueTypeOfNode(node: LuaNode) {
 	}
 }
 
-function getReturnType(returnNode: LuaReturnNode) {
+function getReturnType(returnNode: luaparse.ReturnStatement) {
 	const returnTypes = [];
 	for (const node of returnNode.arguments) {
 		returnTypes.push(getValueTypeOfNode(node));
@@ -87,7 +85,7 @@ function getReturnType(returnNode: LuaReturnNode) {
 		: returnTypes[0] || "void";
 }
 
-function getFunctionReturnType(functionNode: LuaFunctionDeclaration) {
+function getFunctionReturnType(functionNode: luaparse.FunctionDeclaration) {
 	let returnType = "void";
 	for (const bodyNode of functionNode.body) {
 		if (isLuaReturnNode(bodyNode)) {
@@ -98,55 +96,92 @@ function getFunctionReturnType(functionNode: LuaFunctionDeclaration) {
 	return returnType;
 }
 
-function getInterfacedNodes(body: LuaNode[]) {
+function getInterfacedNodes(body: luaparse.Statement[]) {
 	for (const bodyNode of body) {
 		if (TypeGuard.isLuaFunctionDeclaration(bodyNode)) {
 			const { identifier } = bodyNode;
-			console.log("bodyDecl", bodyNode);
-			if (TypeGuard.isMemberExpression(identifier)) {
+			if (
+				TypeGuard.isMemberExpression(identifier!) &&
+				TypeGuard.isLuaIdentifier(identifier!.base)
+			) {
 				const int = interfaces.get(identifier.base.name);
 				const cls = classes.get(identifier.base.name);
 				if (int) {
-					if (identifier.indexer === ":") {
-						console.log("add method");
-						int.methods.push({
-							kind: StructureKind.MethodSignature,
-							name: identifier.identifier.name,
-							returnType: "void",
-						});
-					} else {
-						int.properties.push({
-							kind: StructureKind.PropertySignature,
-							name: identifier.identifier.name,
-							type: "(...args: unknown[]) => unknown",
-							trailingTrivia:
-								" /* Dot function cannot be inferred */",
-						});
-					}
-				} else if (cls) {
-					if (identifier.indexer === ":") {
-						console.log("add method");
-						cls.methods.push({
-							kind: StructureKind.Method,
-							name: identifier.identifier.name,
-							parameters: getFunctionParameters(bodyNode),
-							returnType: getFunctionReturnType(bodyNode),
-						});
-					} else {
-						if (identifier.identifier.name === "new") {
-							console.log("add constructor");
-							cls.ctors.push({
-								kind: StructureKind.Constructor,
-								parameters: getFunctionParameters(bodyNode),
-							});
-						} else {
-							cls.methods.push({
-								kind: StructureKind.Method,
+					if (TypeGuard.isMemberExpression(identifier!)) {
+						if (identifier.indexer === ":") {
+							int.methods.push({
+								kind: StructureKind.MethodSignature,
 								name: identifier.identifier.name,
-								isStatic: true,
+								trailingTrivia: ` // ':' function`,
 								parameters: getFunctionParameters(bodyNode),
 								returnType: getFunctionReturnType(bodyNode),
 							});
+						} else {
+							int.methods.push({
+								kind: StructureKind.MethodSignature,
+								name: identifier.identifier.name,
+								trailingTrivia: ` // '.' function`,
+								parameters: [
+									{
+										name: "this",
+										type: "void",
+									},
+									...getFunctionParameters(bodyNode),
+								],
+								returnType: getFunctionReturnType(bodyNode),
+							});
+						}
+					}
+				} else if (cls) {
+					if (TypeGuard.isMemberExpression(identifier!)) {
+						if (identifier!.indexer === ":") {
+							cls.methods.push({
+								kind: StructureKind.Method,
+								name: identifier!.identifier!.name,
+								parameters: getFunctionParameters(bodyNode),
+								returnType: getFunctionReturnType(bodyNode),
+							});
+						} else {
+							if (identifier!.identifier!.name === "new") {
+								cls.ctors.push({
+									kind: StructureKind.Constructor,
+									parameters: getFunctionParameters(bodyNode),
+								});
+							} else {
+								const firstParam = bodyNode.parameters[0];
+								const { name } = identifier!.identifier!;
+
+								const parameters = getFunctionParameters(
+									bodyNode,
+								);
+
+								let isMethod = false;
+								if (
+									firstParam &&
+									TypeGuard.isLuaIdentifier(firstParam)
+								) {
+									if (firstParam.name === "self") {
+										isMethod = true;
+										parameters.shift();
+									}
+								}
+
+								if (!isMethod) {
+									parameters.unshift({
+										kind: StructureKind.Parameter,
+										name: "this",
+										type: "void",
+									});
+								}
+
+								cls.methods.push({
+									kind: StructureKind.Method,
+									name,
+									isStatic: true,
+									parameters,
+									returnType: getFunctionReturnType(bodyNode),
+								});
+							}
 						}
 					}
 				}
@@ -155,10 +190,13 @@ function getInterfacedNodes(body: LuaNode[]) {
 	}
 }
 
-function getNodesMatchingName(name: string, body: LuaNode[]) {
+function getNodesMatchingName(name: string, body: luaparse.Statement[]) {
 	const statements = new Array<StatementStructures>();
 	for (const bodyNode of body) {
-		if (TypeGuard.isLuaFunctionDeclaration(bodyNode)) {
+		if (
+			TypeGuard.isLuaFunctionDeclaration(bodyNode) &&
+			TypeGuard.isLuaIdentifier(bodyNode.identifier!)
+		) {
 			if (bodyNode.identifier.name === name) {
 				const parameters = getFunctionParameters(bodyNode);
 
@@ -224,7 +262,10 @@ function getNodesMatchingName(name: string, body: LuaNode[]) {
 	return statements;
 }
 
-function generateStatementsForReturn(node: LuaReturnNode, body: LuaNode[]) {
+function generateStatementsForReturn(
+	node: luaparse.ReturnStatement,
+	body: luaparse.Statement[],
+) {
 	const statements = new Array<StatementStructures>();
 	const { arguments: nodeArgs } = node;
 
@@ -276,7 +317,7 @@ function generateStatementsForReturn(node: LuaReturnNode, body: LuaNode[]) {
 	return statements;
 }
 
-function generate(body: LuaNode[]) {
+function generate(body: luaparse.Statement[]) {
 	const statements = new Array<StatementStructures>();
 
 	for (const node of body) {
@@ -323,11 +364,13 @@ function generate(body: LuaNode[]) {
 		} else if (isLuaAssignmentStatement(node)) {
 			console.log("isLuaAssignmentStatement");
 			for (const [index, variable] of node.variables.entries()) {
-				const init = node.init[index] as LuaIdentifier;
+				const init = node.init[index] as luaparse.Identifier;
 
 				// Convert to class...
 				console.log("luaMemExpression", variable, init);
 				if (
+					TypeGuard.isMemberExpression(variable) &&
+					TypeGuard.isLuaIdentifier(variable.base) &&
 					init.name === variable.base.name &&
 					variable.identifier.name === "__index"
 				) {
@@ -361,9 +404,7 @@ function generate(body: LuaNode[]) {
 							properties.push({
 								kind: StructureKind.PropertySignature,
 								name: field.key.name,
-								type: TypeGuard.isLiteral(field.value)
-									? typeOf(field.value)
-									: "unknown",
+								type: getValueTypeOfNode(field.value),
 							});
 						}
 					}
